@@ -17,17 +17,11 @@ CropSentinel AI is an integrated agricultural intelligence platform designed to 
 * **APIs:** OpenWeatherMap API
 * **Tools:** VS Code, Live Server
 
-## ⚙️ How to Run
-1. Clone this repository or download the `index.html` file.
-2. Open the folder in **VS Code**.
-3. Install the **Live Server** extension.
-4. Click **'Go Live'** in the bottom status bar.
-5. Ensure you grant camera permissions to allow the AI Monitor to function.
-
 ## 📋 Future Scope
 * Integration of local languages (Telugu) for broader accessibility.
 * SMS/WhatsApp alerts for weather and intrusion warnings.
 * Soil moisture sensor integration for automated irrigation.
 
 ---
-*Created with ❤️ by Team Invincible for the Hackathon 2026.*
+github repo link:https://github.com/Anugula-Ashritha/Agrithon.git
+deployed link:https://anugula-ashritha.github.io/Agrithon/
