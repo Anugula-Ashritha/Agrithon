@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CropSentinel AI | Team Invincible</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
+    
+    <style>
+        :root { --primary: #1b5e20; --secondary: #2e7d32; --light: #f4f4f4; --dark: #121212; --accent: #f39c12; }
+        body { margin:0; font-family: 'Segoe UI', Arial; background: var(--light); transition: 0.3s; }
+        .sidebar { width:240px; height:100vh; background: var(--primary); position:fixed; color:white; z-index: 10; }
+        .sidebar h2 { text-align:center; padding:20px; border-bottom: 1px solid #ffffff33; }
+        .sidebar button { width:100%; padding:15px 20px; border:none; background:none; color:white; cursor:pointer; text-align:left; font-size:16px; transition: 0.2s; }
+        .sidebar button:hover { background: var(--secondary); padding-left: 30px; }
+        .main { margin-left:240px; padding:30px; }
+        .section { display:none; animation: fadeIn 0.5s; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .card { background:white; padding:25px; border-radius:15px; box-shadow:0 4px 15px rgba(0,0,0,0.1); margin-bottom:20px; }
+        .grid { display: flex; gap: 20px; flex-wrap: wrap; }
+        .weather-card { flex: 1; min-width: 120px; text-align: center; background: #e3f2fd; border-radius: 10px; padding: 15px; border-bottom: 4px solid #2196f3; }
+        video { width:100%; max-width: 500px; border-radius: 12px; border: 4px solid var(--primary); }
+        #leaf-preview { max-width: 350px; display: none; margin: 15px 0; border: 2px dashed var(--primary); border-radius: 10px; }
+        .status-box { padding: 15px; border-radius: 8px; margin-top: 10px; font-weight: bold; }
+        .alert { background: #ffebee; color: #c62828; border-left: 5px solid #c62828; }
+        .healthy { background: #e8f5e9; color: #2e7d32; border-left: 5px solid #2e7d32; }
+        .warning { background: #fff3e0; color: #ef6c00; border-left: 5px solid #ef6c00; }
+        body.dark-mode { background: var(--dark); color: white; }
+        body.dark-mode .card { background: #1e1e1e; color: white; }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h2>CropSentinel 🌾</h2>
+    <button onclick="show('dashboard')">🏠 Dashboard</button>
+    <button onclick="show('monitor')">🎥 AI Monitor</button>
+    <button onclick="show('leaf-doctor')">🍃 Leaf Doctor</button>
+    <button onclick="show('weather')">🌦️ Weather Center</button>
+    <button onclick="toggleDark()">🌙 Dark Mode</button>
+    <div style="position:absolute; bottom:20px; width:100%; text-align:center; font-size:11px; opacity:0.6;">
+        Team Invincible | SIH Prototype
+    </div>
+</div>
+
+<div class="main">
+    <div id="dashboard" class="section" style="display:block;">
+        <h1>Farmer Command Center</h1>
+        <div class="grid">
+            <div class="card" style="flex:1;">System Status<br><h2 style="color: #27ae60;">ACTIVE ✅</h2></div>
+            <div class="card" style="flex:1;">Detections<br><h2 id="total-count">0</h2></div>
+        </div>
+        <div class="card">
+            <h3>Decision Support Advice</h3>
+            <p id="ai-advice" style="font-size:18px;">Analyzing weather for crop advice...</p>
+        </div>
+    </div>
+
+    <div id="monitor" class="section">
+        <h1>24/7 Field Intelligence</h1>
+        <div class="card">
+            <video id="video" autoplay muted></video>
+            <h3 id="monitor-status">Warming up AI models...</h3>
+            <button onclick="playAlarm()" style="background:#d32f2f; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer;">🔊 TEST ALARM</button>
+        </div>
+    </div>
+
+    <div id="leaf-doctor" class="section">
+        <h1>AI Disease Diagnostic</h1>
+        <div class="card">
+            <p><b>Expert Tip:</b> For better accuracy, ensure the leaf is well-lit and centered.</p>
+            <input type="file" id="imageUpload" accept="image/*">
+            <br><img id="leaf-preview" src="#" />
+            <h2 id="resultText">Waiting for scan...</h2>
+            <div id="remedyBox" class="status-box" style="display:none;"><p id="remedyText"></p></div>
+        </div>
+    </div>
+
+    <div id="weather" class="section">
+        <h1>Weather Forecast Center</h1>
+        <div class="card">
+            <h3 id="location-name">Syncing with Satellite...</h3>
+            <div class="grid">
+                <div class="weather-card">🌡️ Temp<br><h2 id="w-temp">--°C</h2></div>
+                <div class="weather-card">💧 Humid<br><h2 id="w-hum">--%</h2></div>
+                <div class="weather-card">☁️ Skies<br><h2 id="w-cond">--</h2></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function show(id) {
+        document.querySelectorAll('.section').forEach(s => s.style.display = 'none');
+        document.getElementById(id).style.display = 'block';
+    }
+    function toggleDark() { document.body.classList.toggle('dark-mode'); }
+
+    // --- WEATHER API (Secunderabad/Hyderabad) ---
+    const API_KEY = "cd2a810875cf9dea618e63da44b0ccbd"; 
+    const CITY = "Secunderabad";
+
+    async function getWeatherData() {
+        try {
+            const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${CITY}&appid=${API_KEY}&units=metric`);
+            const data = await res.json();
+            if(data.cod === 200) {
+                document.getElementById('location-name').innerText = `Station: ${CITY}, Telangana`;
+                document.getElementById('w-temp').innerText = Math.round(data.main.temp) + "°C";
+                document.getElementById('w-hum').innerText = data.main.humidity + "%";
+                document.getElementById('w-cond').innerText = data.weather[0].main;
+                
+                const advice = document.getElementById('ai-advice');
+                if(data.weather[0].main.includes("Rain")) advice.innerHTML = "<b>🌧️ Rain Predicted:</b> Avoid spraying pesticides today to prevent runoff.";
+                else if(data.main.temp > 35) advice.innerHTML = "<b>🌡️ High Heat:</b> Check soil moisture levels. Irrigation recommended this evening.";
+                else advice.innerHTML = "<b>✅ Stable Weather:</b> Great time for routine pruning and fertilizer application.";
+            } else { throw new Error(); }
+        } catch (e) {
+            document.getElementById('location-name').innerText = "Weather (Offline Mode)";
+            document.getElementById('ai-advice').innerText = "System ready for manual leaf scanning.";
+        }
+    }
+    getWeatherData();
+
+    // --- AI FIELD MONITOR (Object Detection) ---
+    const video = document.getElementById('video');
+    navigator.mediaDevices.getUserMedia({ video: true }).then(s => video.srcObject = s);
+    
+    cocoSsd.load().then(model => {
+        document.getElementById('monitor-status').innerText = "System Guarding Field: ACTIVE ✅";
+        setInterval(async () => {
+            const predicts = await model.detect(video);
+            predicts.forEach(p => {
+                if(["dog","cow","person","bird"].includes(p.class)) {
+                    document.getElementById('total-count').innerText = parseInt(document.getElementById('total-count').innerText) + 1;
+                    playAlarm();
+                }
+            });
+        }, 3000);
+    });
+
+    function playAlarm() { new Audio("https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg").play(); }
+
+    // --- LEAF DOCTOR (High-Accuracy Logic) ---
+    const TM_URL = "https://teachablemachine.withgoogle.com/models/Omy0nVxhR/";
+    let leafModel;
+    tmImage.load(TM_URL + "model.json", TM_URL + "metadata.json").then(m => leafModel = m);
+
+    document.getElementById('imageUpload').addEventListener('change', (e) => {
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            const preview = document.getElementById('leaf-preview');
+            preview.src = event.target.result;
+            preview.style.display = 'block';
+            
+            const resultText = document.getElementById('resultText');
+            resultText.innerHTML = "Processing Neural Networks... 🧠";
+            
+            const prediction = await leafModel.predict(preview);
+            let top = { className: "", probability: 0 };
+            prediction.forEach(p => { if(p.probability > top.probability) top = p; });
+            
+            const rb = document.getElementById('remedyBox');
+            rb.style.display = "block";
+            
+            // ACCURACY CHECK: Only show if probability is > 65%
+            if(top.probability > 0.65) {
+                const conf = (top.probability * 100).toFixed(0);
+                resultText.innerHTML = `Diagnosis: <span style="color:#2e7d32">${top.className}</span> (${conf}%)`;
+                
+                const isHealthy = top.className.toLowerCase().includes("healthy");
+                rb.className = "status-box " + (isHealthy ? "healthy" : "alert");
+                document.getElementById('remedyText').innerHTML = isHealthy ? 
+                    "<b>Result:</b> No symptoms found. Maintain regular irrigation." : 
+                    "<b>Action Required:</b> Disease detected. Apply organic fungicide and isolate the crop.";
+            } else {
+                resultText.innerHTML = "Accuracy Low (Scan Unclear)";
+                rb.className = "status-box warning";
+                document.getElementById('remedyText').innerHTML = "<b>Note:</b> AI is unsure. Please provide a clearer photo with better lighting.";
+            }
+        };
+        reader.readAsDataURL(e.target.files[0]);
+    });
+</script>
+</body>
+</html>
